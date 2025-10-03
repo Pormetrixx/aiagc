@@ -76,6 +76,30 @@ Professional AI-powered agent for automated outbound calling using Asterisk and 
 
 ## 🚀 Quick Start
 
+### Option A: Complete Installation on Ubuntu 22.04 (Recommended for Testing)
+
+For a complete installation on a fresh Ubuntu 22.04 server with Asterisk and internal testing extensions:
+
+```bash
+git clone https://github.com/Pormetrixx/aiagc.git
+cd aiagc
+sudo ./install.sh
+```
+
+This will:
+- Install all system dependencies
+- Compile and install Asterisk from source
+- Configure internal SIP extensions (1000, 1001) for testing
+- Set up the AI agent application
+- Create all necessary directories and configurations
+
+After installation, you can test the AI agent by:
+1. Registering a SIP client (extension 1000, password: test1000)
+2. Calling extension 1001 to hear the AI agent
+3. See `TESTING_GUIDE.md` for detailed testing instructions
+
+### Option B: Docker-Based Setup (Production)
+
 ### 1. Clone the Repository
 
 ```bash
@@ -146,7 +170,30 @@ username=YOUR_SIP_USERNAME
 password=YOUR_SIP_PASSWORD
 ```
 
-### 6. Initiate a Test Call
+### 6. Test Internal Extensions (After install.sh)
+
+If you used `install.sh`, you can test the AI agent with internal extensions:
+
+```bash
+# Check system status
+./test_system.sh
+
+# View testing guide
+cat TESTING_GUIDE.md
+```
+
+**To test the AI agent:**
+1. Install a SIP client (Zoiper, Linphone, MicroSIP, etc.)
+2. Configure with:
+   - Server: Your server IP
+   - Extension: 1000
+   - Password: test1000
+   - Port: 5060
+3. Call extension **1001** to hear the AI agent
+4. Monitor logs: `tail -f /opt/aiagc/logs/aiagc.log`
+5. View Asterisk console: `asterisk -rvvv`
+
+### 7. Initiate Outbound Test Call (Production)
 
 Using Asterisk AMI:
 

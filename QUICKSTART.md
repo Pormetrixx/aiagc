@@ -2,6 +2,25 @@
 
 Get your AI calling agent up and running in 10 minutes!
 
+## Two Installation Methods
+
+### Method 1: Complete Ubuntu Installation (Recommended for Testing)
+
+Perfect for testing on a fresh Ubuntu 22.04 server with internal extensions.
+
+**One command installation:**
+```bash
+sudo ./install.sh
+```
+
+This installs everything including Asterisk and configures internal test extensions (1000 → 1001).
+
+**Jump to**: [Testing with Internal Extensions](#testing-with-internal-extensions)
+
+### Method 2: Docker-Based Setup (Production)
+
+For production deployments with existing infrastructure.
+
 ## Prerequisites Checklist
 
 - [ ] Linux server (Ubuntu 20.04+ recommended)
@@ -72,7 +91,64 @@ You should see 4 services running:
 - aiagc-redis
 - aiagc-app
 
-## Making Your First Call
+## Testing with Internal Extensions
+
+If you used `install.sh`, test the AI agent with internal extensions:
+
+### 1. Check System Status
+
+```bash
+./test_system.sh
+```
+
+This will verify:
+- Asterisk is running
+- SIP endpoints are configured
+- Network settings
+- Configuration files
+
+### 2. Configure Your SIP Client
+
+Install a SIP softphone:
+- **Windows/Mac/Linux**: Zoiper, MicroSIP, Linphone
+- **Android/iOS**: Zoiper, Linphone
+
+Configure with:
+```
+Server: <your-server-ip>
+Username: 1000
+Password: test1000
+Port: 5060
+Transport: UDP
+```
+
+### 3. Test the AI Agent
+
+1. Ensure your SIP client shows "Registered"
+2. Dial extension: **1001**
+3. The AI agent will answer in German
+4. Have a conversation to test the system
+
+### 4. Monitor the Call
+
+```bash
+# View Asterisk console
+asterisk -rvvv
+
+# View application logs
+tail -f /opt/aiagc/logs/aiagc.log
+
+# Check call status
+asterisk -rx "core show channels"
+```
+
+### 5. Additional Test Extensions
+
+- **1001**: AI Agent (main test)
+- **600**: Echo test (audio quality check)
+- **1000**: Playback test
+
+## Making Outbound Calls (Production)
 
 ### Test Call
 
