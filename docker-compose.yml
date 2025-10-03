@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  asterisk:
+    image: andrius/asterisk:latest
+    container_name: aiagc-asterisk
+    ports:
+      - "5060:5060/udp"  # SIP
+      - "5038:5038"      # AMI
+      - "10000-10100:10000-10100/udp"  # RTP
+    volumes:
+      - ./config/asterisk:/etc/asterisk
+      - ./recordings:/var/spool/asterisk/monitor
+    restart: unless-stopped
+    networks:
+      - aiagc-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: aiagc-postgres
+    environment:
+      POSTGRES_DB: aiagc_calls
+      POSTGRES_USER: aiagc
+      POSTGRES_PASSWORD: aiagc_password_change_me
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - aiagc-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: aiagc-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - aiagc-network
+    command: redis-server --appendonly yes
+
+  aiagc-app:
+    build: .
+    container_name: aiagc-app
+    depends_on:
+      - postgres
+      - redis
+      - asterisk
+    environment:
+      - ASTERISK_HOST=asterisk
+      - DATABASE_URL=postgresql://aiagc:aiagc_password_change_me@postgres:5432/aiagc_calls
+      - REDIS_HOST=redis
+    volumes:
+      - ./src:/app/src
+      - ./logs:/app/logs
+      - ./recordings:/app/recordings
+    restart: unless-stopped
+    networks:
+      - aiagc-network
+    stdin_open: true
+    tty: true
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  aiagc-network:
+    driver: bridge
