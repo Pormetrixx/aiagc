@@ -5,9 +5,8 @@ pydantic==2.5.0
 pydantic-settings==2.1.0
 python-dotenv==1.0.0
 
-# Asterisk AGI
-pyst2==0.5.1
-asterisk-agi==0.1.5
+# Asterisk ARI
+ari==0.1.3
 
 # Speech recognition
 deepgram-sdk==3.2.0

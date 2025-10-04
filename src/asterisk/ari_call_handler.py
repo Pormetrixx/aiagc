@@ -1,11 +1,6 @@
 """
-Main Call Handler (Legacy AGI - Deprecated)
-Orchestrates the entire call flow from initiation to completion
-
-DEPRECATION NOTICE:
-This module uses the legacy AGI (Asterisk Gateway Interface).
-For new implementations, use ari_call_handler.py which uses the modern
-ARI (Asterisk REST Interface) for better scalability and features.
+ARI-based Call Handler
+Orchestrates the entire call flow using Asterisk REST Interface
 """
 
 import asyncio
@@ -22,15 +17,15 @@ from ..speech.tts import TextToSpeech
 from ..ai.intent_detector import IntentDetector
 from ..dialogue.dialogue_generator import DialogueGenerator
 from ..dialogue.call_flow import CallFlowManager
-from ..asterisk.agi_interface import AsteriskAGI
+from ..asterisk.ari_interface import AsteriskARI
 from ..config import settings
 
 
-class CallHandler:
-    """Main call handler orchestrating all components"""
+class ARICallHandler:
+    """ARI-based call handler orchestrating all components"""
     
     def __init__(self):
-        """Initialize call handler"""
+        """Initialize ARI call handler"""
         # Initialize components
         self.deepgram_stt = DeepgramSTT()
         self.whisper_stt = WhisperSTT(model_name="base")
@@ -38,8 +33,8 @@ class CallHandler:
         self.intent_detector = IntentDetector()
         self.dialogue_generator = DialogueGenerator()
         
-        # AGI interface
-        self.agi = AsteriskAGI()
+        # ARI interface
+        self.ari = AsteriskARI()
         
         # Call state
         self.call_record: Optional[CallRecord] = None
@@ -47,19 +42,29 @@ class CallHandler:
         self.current_transcript_buffer = ""
         self.is_speaking = False
         self.should_stop = False
+        self.current_channel_id: Optional[str] = None
         
     async def handle_call(
         self,
-        phone_number: str,
+        channel_id: str,
+        phone_number: str = None,
         customer_name: Optional[str] = None
     ):
         """
-        Handle complete call lifecycle
+        Handle complete call lifecycle with ARI
         
         Args:
-            phone_number: Customer phone number
+            channel_id: ARI channel ID
+            phone_number: Customer phone number (extracted from channel if not provided)
             customer_name: Optional customer name
         """
+        self.current_channel_id = channel_id
+        
+        # Get channel info
+        channel_info = self.ari.get_channel_info(channel_id)
+        if not phone_number:
+            phone_number = channel_info.get('caller', {}).get('number', 'unknown')
+        
         # Create call record
         call_id = str(uuid.uuid4())
         self.call_record = CallRecord(
@@ -76,22 +81,19 @@ class CallHandler:
             self.dialogue_generator
         )
         
-        logger.info(f"Starting call {call_id} to {phone_number}")
+        logger.info(f"Starting ARI call {call_id} on channel {channel_id}")
         
         try:
-            # Setup AGI
-            self.agi.setup()
-            channel_info = self.agi.get_channel_info()
             logger.info(f"Channel info: {channel_info}")
             
             # Answer the call
-            if not self.agi.answer():
+            if not self.ari.answer_channel(channel_id):
                 logger.error("Failed to answer call")
                 self.call_record.state = CallState.FAILED
                 return
             
             self.call_record.state = CallState.ANSWERED
-            logger.info("Call answered")
+            logger.info("Call answered via ARI")
             
             # Start speech recognition
             await self._setup_speech_recognition()
@@ -101,7 +103,7 @@ class CallHandler:
             
             # End call
             self.call_record.state = CallState.COMPLETED
-            self.agi.hangup()
+            self.ari.hangup_channel(channel_id)
             
             logger.info(f"Call {call_id} completed successfully")
             
@@ -115,7 +117,7 @@ class CallHandler:
             if self.deepgram_stt.is_connected:
                 await self.deepgram_stt.stop_stream()
             
-            # Save call record (would save to database in production)
+            # Save call record
             await self._save_call_record()
     
     async def _setup_speech_recognition(self):
@@ -234,7 +236,7 @@ class CallHandler:
     
     async def _speak(self, text: str):
         """
-        Speak text to customer
+        Speak text to customer using ARI
         
         Args:
             text: Text to speak
@@ -246,17 +248,39 @@ class CallHandler:
             # Generate audio
             audio_data = await self.tts.generate_speech(text)
             
-            # In production, stream audio to Asterisk
-            # For now, we'll save to file and play via AGI
+            # Save audio file for ARI playback
             audio_file = f"/tmp/agent_speech_{uuid.uuid4()}.wav"
             with open(audio_file, "wb") as f:
                 f.write(audio_data)
             
-            # Play audio through Asterisk
-            self.agi.stream_file(audio_file.replace('.wav', ''))
-            
-            # Clean up
+            # Play audio through ARI using media URI
+            # Note: ARI requires the file to be in Asterisk's sounds directory
+            # In production, you would copy/stream the file appropriately
+            import shutil
             import os
+            
+            # Copy to Asterisk sounds directory (if accessible)
+            asterisk_sounds_dir = "/var/lib/asterisk/sounds/en"
+            if os.path.exists(asterisk_sounds_dir):
+                dest_file = os.path.join(asterisk_sounds_dir, os.path.basename(audio_file))
+                shutil.copy(audio_file, dest_file)
+                
+                # Play via ARI (remove .wav extension for sound: URI)
+                media_uri = f"sound:en/{os.path.basename(audio_file).replace('.wav', '')}"
+                self.ari.play_media(media_uri, channel_id=self.current_channel_id)
+                
+                # Wait for playback to complete (approximate based on text length)
+                # In production, use playback events to track completion
+                estimated_duration = len(text.split()) * 0.5  # Rough estimate
+                await asyncio.sleep(estimated_duration)
+                
+                # Cleanup
+                if os.path.exists(dest_file):
+                    os.remove(dest_file)
+            else:
+                logger.warning(f"Asterisk sounds directory not accessible: {asterisk_sounds_dir}")
+            
+            # Always cleanup temp file
             if os.path.exists(audio_file):
                 os.remove(audio_file)
             
@@ -274,8 +298,8 @@ class CallHandler:
         # In production, save to PostgreSQL
         # For now, log the summary
         logger.info(f"""
-Call Summary:
-=============
+Call Summary (ARI):
+===================
 Call ID: {self.call_record.call_id}
 Phone: {self.call_record.phone_number}
 Duration: {self.call_record.duration}s
@@ -293,15 +317,45 @@ Qualification:
         # await db.save_call_record(self.call_record)
 
 
-async def main():
-    """Main entry point for AGI script"""
-    handler = CallHandler()
+def create_ari_application():
+    """
+    Create and run ARI application
+    This is the main entry point for ARI-based calls
+    """
+    handler = ARICallHandler()
     
-    # Get phone number from AGI environment
-    # In production, this would come from the dialplan
-    phone_number = handler.agi.env.get('callerid', 'unknown')
-    
-    await handler.handle_call(phone_number)
+    try:
+        # Connect to ARI
+        handler.ari.connect()
+        logger.info("ARI application started")
+        
+        # Define event handlers
+        def on_stasis_start(channel_obj, event):
+            """Handle new channel entering Stasis application"""
+            channel_id = channel_obj.id
+            logger.info(f"StasisStart: Channel {channel_id} entered application")
+            
+            # Handle the call asynchronously
+            asyncio.create_task(handler.handle_call(channel_id))
+        
+        def on_stasis_end(channel_obj, event):
+            """Handle channel leaving Stasis application"""
+            channel_id = channel_obj.id
+            logger.info(f"StasisEnd: Channel {channel_id} left application")
+        
+        # Start event loop
+        handler.ari.start_event_loop(
+            on_stasis_start=on_stasis_start,
+            on_stasis_end=on_stasis_end
+        )
+        
+    except KeyboardInterrupt:
+        logger.info("Shutting down ARI application")
+    except Exception as e:
+        logger.error(f"Error in ARI application: {e}")
+        raise
+    finally:
+        handler.ari.disconnect()
 
 
 if __name__ == "__main__":
@@ -312,5 +366,5 @@ if __name__ == "__main__":
         level=settings.log_level
     )
     
-    # Run handler
-    asyncio.run(main())
+    # Run ARI application
+    create_ari_application()
