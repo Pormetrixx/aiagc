@@ -30,4 +30,5 @@ ENV PYTHONPATH=/app
 # Expose ports if needed
 EXPOSE 8000
 
-CMD ["python", "-m", "src.asterisk.call_handler"]
+# Use ARI call handler as the default entry point (recommended)
+CMD ["python", "-m", "src.asterisk.ari_call_handler"]

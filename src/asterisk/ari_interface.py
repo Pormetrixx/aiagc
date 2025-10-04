@@ -388,6 +388,425 @@ class AsteriskARI:
             logger.error(f"Error destroying bridge: {e}")
             return False
     
+    def send_dtmf(self, dtmf: str, channel_id: str = None, duration: int = 100) -> bool:
+        """
+        Send DTMF tones to channel
+        
+        Args:
+            dtmf: DTMF string to send (0-9, *, #, A-D)
+            channel_id: Channel ID (uses self.channel if not provided)
+            duration: Duration of each DTMF tone in milliseconds
+            
+        Returns:
+            Success status
+        """
+        try:
+            channel = self.client.channels.get(channelId=channel_id) if channel_id else self.channel
+            if channel:
+                channel.sendDTMF(dtmf=dtmf, duration=duration)
+                logger.info(f"Sent DTMF '{dtmf}' to channel {channel.id}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error sending DTMF: {e}")
+            return False
+    
+    def mute_channel(self, direction: str = "both", channel_id: str = None) -> bool:
+        """
+        Mute audio on channel
+        
+        Args:
+            direction: Direction to mute ('in', 'out', or 'both')
+            channel_id: Channel ID (uses self.channel if not provided)
+            
+        Returns:
+            Success status
+        """
+        try:
+            channel = self.client.channels.get(channelId=channel_id) if channel_id else self.channel
+            if channel:
+                channel.mute(direction=direction)
+                logger.info(f"Muted {direction} on channel {channel.id}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error muting channel: {e}")
+            return False
+    
+    def unmute_channel(self, direction: str = "both", channel_id: str = None) -> bool:
+        """
+        Unmute audio on channel
+        
+        Args:
+            direction: Direction to unmute ('in', 'out', or 'both')
+            channel_id: Channel ID (uses self.channel if not provided)
+            
+        Returns:
+            Success status
+        """
+        try:
+            channel = self.client.channels.get(channelId=channel_id) if channel_id else self.channel
+            if channel:
+                channel.unmute(direction=direction)
+                logger.info(f"Unmuted {direction} on channel {channel.id}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error unmuting channel: {e}")
+            return False
+    
+    def hold_channel(self, channel_id: str = None) -> bool:
+        """
+        Place channel on hold
+        
+        Args:
+            channel_id: Channel ID (uses self.channel if not provided)
+            
+        Returns:
+            Success status
+        """
+        try:
+            channel = self.client.channels.get(channelId=channel_id) if channel_id else self.channel
+            if channel:
+                channel.hold()
+                logger.info(f"Placed channel {channel.id} on hold")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error placing channel on hold: {e}")
+            return False
+    
+    def unhold_channel(self, channel_id: str = None) -> bool:
+        """
+        Remove channel from hold
+        
+        Args:
+            channel_id: Channel ID (uses self.channel if not provided)
+            
+        Returns:
+            Success status
+        """
+        try:
+            channel = self.client.channels.get(channelId=channel_id) if channel_id else self.channel
+            if channel:
+                channel.unhold()
+                logger.info(f"Removed channel {channel.id} from hold")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error removing channel from hold: {e}")
+            return False
+    
+    def snoop_channel(
+        self,
+        channel_id: str,
+        spy: str = "both",
+        whisper: str = "none",
+        app: str = None,
+        app_args: str = None
+    ) -> Optional[str]:
+        """
+        Create a snoop channel for monitoring/whispering
+        
+        Args:
+            channel_id: Channel ID to snoop on
+            spy: Direction to spy on ('in', 'out', 'both', 'none')
+            whisper: Direction to whisper ('in', 'out', 'both', 'none')
+            app: Stasis application for snoop channel
+            app_args: Arguments for the application
+            
+        Returns:
+            Snoop channel ID or None
+        """
+        try:
+            channel = self.client.channels.get(channelId=channel_id)
+            if channel:
+                app = app or self.app_name
+                snoop = channel.snoopChannel(
+                    spy=spy,
+                    whisper=whisper,
+                    app=app,
+                    appArgs=app_args
+                )
+                logger.info(f"Created snoop channel {snoop.id} for {channel_id}")
+                return snoop.id
+            return None
+        except Exception as e:
+            logger.error(f"Error creating snoop channel: {e}")
+            return None
+    
+    def redirect_channel(self, endpoint: str, channel_id: str = None) -> bool:
+        """
+        Redirect channel to a new endpoint
+        
+        Args:
+            endpoint: New endpoint to redirect to
+            channel_id: Channel ID (uses self.channel if not provided)
+            
+        Returns:
+            Success status
+        """
+        try:
+            channel = self.client.channels.get(channelId=channel_id) if channel_id else self.channel
+            if channel:
+                channel.redirect(endpoint=endpoint)
+                logger.info(f"Redirected channel {channel.id} to {endpoint}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error redirecting channel: {e}")
+            return False
+    
+    def ring_channel(self, channel_id: str = None) -> bool:
+        """
+        Indicate ringing on channel
+        
+        Args:
+            channel_id: Channel ID (uses self.channel if not provided)
+            
+        Returns:
+            Success status
+        """
+        try:
+            channel = self.client.channels.get(channelId=channel_id) if channel_id else self.channel
+            if channel:
+                channel.ring()
+                logger.info(f"Ringing channel {channel.id}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error ringing channel: {e}")
+            return False
+    
+    def stop_ringing_channel(self, channel_id: str = None) -> bool:
+        """
+        Stop ringing indication on channel
+        
+        Args:
+            channel_id: Channel ID (uses self.channel if not provided)
+            
+        Returns:
+            Success status
+        """
+        try:
+            channel = self.client.channels.get(channelId=channel_id) if channel_id else self.channel
+            if channel:
+                channel.ringStop()
+                logger.info(f"Stopped ringing on channel {channel.id}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error stopping ring on channel: {e}")
+            return False
+    
+    def start_silence_detection(self, channel_id: str = None) -> bool:
+        """
+        Start silence detection on channel
+        
+        Args:
+            channel_id: Channel ID (uses self.channel if not provided)
+            
+        Returns:
+            Success status
+        """
+        try:
+            channel = self.client.channels.get(channelId=channel_id) if channel_id else self.channel
+            if channel:
+                channel.startSilence()
+                logger.info(f"Started silence detection on channel {channel.id}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error starting silence detection: {e}")
+            return False
+    
+    def stop_silence_detection(self, channel_id: str = None) -> bool:
+        """
+        Stop silence detection on channel
+        
+        Args:
+            channel_id: Channel ID (uses self.channel if not provided)
+            
+        Returns:
+            Success status
+        """
+        try:
+            channel = self.client.channels.get(channelId=channel_id) if channel_id else self.channel
+            if channel:
+                channel.stopSilence()
+                logger.info(f"Stopped silence detection on channel {channel.id}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error stopping silence detection: {e}")
+            return False
+    
+    def get_asterisk_info(self) -> Dict[str, Any]:
+        """
+        Get Asterisk system information
+        
+        Returns:
+            System information dictionary
+        """
+        try:
+            info = self.client.asterisk.getInfo()
+            return {
+                'version': info.get('version', ''),
+                'system_info': info.get('system', {}),
+                'config': info.get('config', {}),
+                'status': info.get('status', {}),
+            }
+        except Exception as e:
+            logger.error(f"Error getting Asterisk info: {e}")
+            return {}
+    
+    def list_channels(self) -> list:
+        """
+        List all active channels
+        
+        Returns:
+            List of channel dictionaries
+        """
+        try:
+            channels = self.client.channels.list()
+            return [
+                {
+                    'id': ch.id,
+                    'name': ch.json.get('name', ''),
+                    'state': ch.json.get('state', ''),
+                    'caller': ch.json.get('caller', {}),
+                    'connected': ch.json.get('connected', {}),
+                }
+                for ch in channels
+            ]
+        except Exception as e:
+            logger.error(f"Error listing channels: {e}")
+            return []
+    
+    def list_bridges(self) -> list:
+        """
+        List all active bridges
+        
+        Returns:
+            List of bridge dictionaries
+        """
+        try:
+            bridges = self.client.bridges.list()
+            return [
+                {
+                    'id': br.id,
+                    'type': br.json.get('bridge_type', ''),
+                    'technology': br.json.get('technology', ''),
+                    'channels': br.json.get('channels', []),
+                }
+                for br in bridges
+            ]
+        except Exception as e:
+            logger.error(f"Error listing bridges: {e}")
+            return []
+    
+    def get_recording(self, recording_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get stored recording information
+        
+        Args:
+            recording_name: Name of the recording
+            
+        Returns:
+            Recording information or None
+        """
+        try:
+            recording = self.client.recordings.getStored(recordingName=recording_name)
+            return {
+                'name': recording.json.get('name', ''),
+                'format': recording.json.get('format', ''),
+                'state': recording.json.get('state', ''),
+            }
+        except Exception as e:
+            logger.error(f"Error getting recording: {e}")
+            return None
+    
+    def delete_recording(self, recording_name: str) -> bool:
+        """
+        Delete a stored recording
+        
+        Args:
+            recording_name: Name of the recording
+            
+        Returns:
+            Success status
+        """
+        try:
+            recording = self.client.recordings.getStored(recordingName=recording_name)
+            if recording:
+                recording.deleteStored()
+                logger.info(f"Deleted recording: {recording_name}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error deleting recording: {e}")
+            return False
+    
+    def play_recording(self, recording_name: str, channel_id: str = None) -> Optional[str]:
+        """
+        Play a stored recording on a channel
+        
+        Args:
+            recording_name: Name of the recording to play
+            channel_id: Channel ID (uses self.channel if not provided)
+            
+        Returns:
+            Playback ID or None
+        """
+        try:
+            media = f"recording:{recording_name}"
+            return self.play_media(media, channel_id)
+        except Exception as e:
+            logger.error(f"Error playing recording: {e}")
+            return None
+    
+    def subscribe_to_events(self, event_source: str) -> bool:
+        """
+        Subscribe to events from a specific source
+        
+        Args:
+            event_source: Event source (e.g., 'channel:channel_id' or 'bridge:bridge_id')
+            
+        Returns:
+            Success status
+        """
+        try:
+            self.client.applications.subscribe(
+                applicationName=self.app_name,
+                eventSource=event_source
+            )
+            logger.info(f"Subscribed to events from {event_source}")
+            return True
+        except Exception as e:
+            logger.error(f"Error subscribing to events: {e}")
+            return False
+    
+    def unsubscribe_from_events(self, event_source: str) -> bool:
+        """
+        Unsubscribe from events from a specific source
+        
+        Args:
+            event_source: Event source (e.g., 'channel:channel_id' or 'bridge:bridge_id')
+            
+        Returns:
+            Success status
+        """
+        try:
+            self.client.applications.unsubscribe(
+                applicationName=self.app_name,
+                eventSource=event_source
+            )
+            logger.info(f"Unsubscribed from events from {event_source}")
+            return True
+        except Exception as e:
+            logger.error(f"Error unsubscribing from events: {e}")
+            return False
+    
     def start_event_loop(self, on_stasis_start: Callable = None, on_stasis_end: Callable = None):
         """
         Start ARI event loop

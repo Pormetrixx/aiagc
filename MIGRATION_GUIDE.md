@@ -43,7 +43,7 @@ This guide provides detailed instructions for migrating from the legacy AGI (Ast
 
 Before starting the migration:
 
-- [ ] Asterisk 13+ installed (ARI was introduced in Asterisk 12, but 13+ recommended)
+- [ ] Asterisk 20.15.2 or higher installed (ARI introduced in Asterisk 12, but 20.15.2 recommended for latest features and security)
 - [ ] Python 3.11+ with asyncio support
 - [ ] Access to Asterisk configuration files (`/etc/asterisk/`)
 - [ ] Backup of current configuration
@@ -54,7 +54,7 @@ Before starting the migration:
 
 ```bash
 asterisk -V
-# Should show version 13.0.0 or higher
+# Should show version 20.15.2 or higher for optimal ARI support
 ```
 
 ### Verify ARI Support

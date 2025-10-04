@@ -12,7 +12,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-ASTERISK_VERSION="20.10.2"
+ASTERISK_VERSION="20.15.2"
 INSTALL_DIR="/opt/aiagc"
 ASTERISK_USER="asterisk"
 
