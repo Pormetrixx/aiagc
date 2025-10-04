@@ -122,10 +122,19 @@ DEEPGRAM_API_KEY=your_deepgram_api_key
 # OpenAI
 OPENAI_API_KEY=your_openai_api_key
 
-# Asterisk
+# Asterisk ARI (Recommended - Modern REST Interface)
+ASTERISK_ARI_HOST=localhost
+ASTERISK_ARI_PORT=8088
+ASTERISK_ARI_USERNAME=asterisk
+ASTERISK_ARI_PASSWORD=your_ari_password
+ASTERISK_LANGUAGE=de
+
+# Asterisk AMI (Legacy - for AGI compatibility)
 ASTERISK_HOST=localhost
+ASTERISK_PORT=5038
 ASTERISK_USERNAME=admin
 ASTERISK_SECRET=your_asterisk_secret
+ASTERISK_CONTEXT=outbound-calls-ari
 ASTERISK_CALLER_ID=+4912345678
 
 # Database
@@ -193,9 +202,40 @@ cat TESTING_GUIDE.md
 4. Monitor logs: `tail -f /opt/aiagc/logs/aiagc.log`
 5. View Asterisk console: `asterisk -rvvv`
 
-### 7. Initiate Outbound Test Call (Production)
+### 7. Initiate Outbound Test Call
 
-Using Asterisk AMI:
+#### Using ARI (Recommended - Modern REST Interface)
+
+Start the ARI application:
+
+```bash
+# Run the ARI application in the background
+python -m src.asterisk.ari_call_handler &
+
+# Or use the example script
+python examples/make_calls.py
+```
+
+Using Python code:
+
+```python
+from src.asterisk.ari_interface import AsteriskARI
+
+ari = AsteriskARI()
+ari.connect()
+
+# Originate call using ARI
+channel_id = ari.originate_call(
+    endpoint="PJSIP/+491234567890",
+    context="outbound-calls-ari",
+    extension="s",
+    caller_id="+4912345678"
+)
+
+ari.disconnect()
+```
+
+#### Using AMI (Legacy - for AGI compatibility)
 
 ```python
 from src.asterisk.agi_interface import AsteriskAMI
@@ -210,14 +250,52 @@ ami.originate_call(
 ami.disconnect()
 ```
 
+**Note:** For new implementations, use ARI as it provides better scalability, event handling, and modern REST API capabilities.
+
+## 🔄 Migration from AGI to ARI
+
+This project now supports both legacy AGI and modern ARI interfaces:
+
+### Why ARI?
+- **Modern REST API**: HTTP-based interface instead of stdin/stdout
+- **WebSocket Events**: Real-time event streaming for better responsiveness
+- **Better Control**: Fine-grained control over channels and bridges
+- **Scalability**: Better suited for distributed systems
+- **Future-proof**: Actively maintained and recommended by Asterisk
+
+### Differences
+
+| Feature | AGI (Legacy) | ARI (Modern) |
+|---------|-------------|--------------|
+| **Communication** | stdin/stdout | HTTP REST + WebSocket |
+| **Architecture** | Synchronous | Event-driven |
+| **Call Control** | AGI commands | REST API calls |
+| **Dialplan** | AGI() application | Stasis() application |
+| **Event Handling** | Limited | Rich event system |
+
+### Using ARI
+
+1. **Start ARI Application**:
+   ```bash
+   python -m src.asterisk.ari_call_handler
+   ```
+
+2. **Update Dialplan**: Use `Stasis(aiagc)` instead of `AGI()` in your dialplan
+
+3. **Configure ARI Settings**: Update `.env` with ARI credentials
+
+See the [Migration Guide](#migration-guide) below for detailed instructions.
+
 ## 📁 Project Structure
 
 ```
 aiagc/
 ├── src/
 │   ├── asterisk/          # Asterisk integration
-│   │   ├── agi_interface.py    # AGI and AMI interfaces
-│   │   └── call_handler.py     # Main call orchestration
+│   │   ├── ari_interface.py     # ARI REST interface (modern)
+│   │   ├── ari_call_handler.py  # ARI-based call handler
+│   │   ├── agi_interface.py     # AGI/AMI interfaces (legacy)
+│   │   └── call_handler.py      # AGI-based call handler (deprecated)
 │   ├── speech/            # Speech recognition and synthesis
 │   │   ├── deepgram_stt.py     # Deepgram STT
 │   │   ├── whisper_stt.py      # Whisper STT fallback
@@ -236,6 +314,8 @@ aiagc/
 ├── config/
 │   └── asterisk/          # Asterisk configuration files
 │       ├── extensions.conf     # Dialplan
+│       ├── ari.conf            # ARI config
+│       ├── http.conf           # HTTP server config
 │       ├── manager.conf        # AMI config
 │       └── pjsip.conf          # SIP trunk config
 ├── logs/                  # Application logs
@@ -374,6 +454,175 @@ docker exec aiagc-postgres pg_isready
 # View logs
 docker logs aiagc-postgres
 ```
+
+## 🔄 Migration Guide
+
+### Migrating from AGI to ARI
+
+If you're currently using the legacy AGI implementation, follow these steps to migrate to ARI:
+
+#### Step 1: Update Configuration
+
+Add ARI settings to your `.env` file:
+
+```bash
+# ARI Configuration
+ASTERISK_ARI_HOST=localhost
+ASTERISK_ARI_PORT=8088
+ASTERISK_ARI_USERNAME=asterisk
+ASTERISK_ARI_PASSWORD=your_ari_password
+ASTERISK_LANGUAGE=de
+```
+
+#### Step 2: Configure Asterisk
+
+**Enable ARI in Asterisk** (if not using install.sh):
+
+Create or update `/etc/asterisk/ari.conf`:
+
+```ini
+[general]
+enabled = yes
+pretty = yes
+allowed_origins = *
+
+[asterisk]
+type = user
+read_only = no
+password = your_ari_password
+password_format = plain
+```
+
+Create or update `/etc/asterisk/http.conf`:
+
+```ini
+[general]
+enabled = yes
+bindaddr = 0.0.0.0
+bindport = 8088
+enablestatic = yes
+```
+
+**Reload Asterisk configuration**:
+
+```bash
+asterisk -rx "module reload res_ari.so"
+asterisk -rx "module reload res_http.so"
+```
+
+#### Step 3: Update Dialplan
+
+Change your dialplan contexts from `AGI()` to `Stasis()`:
+
+**Before (AGI):**
+```ini
+[outbound-calls]
+exten => s,1,NoOp(AI Agent Starting)
+    same => n,Answer()
+    same => n,AGI(python3,/path/to/call_handler.py)
+    same => n,Hangup()
+```
+
+**After (ARI):**
+```ini
+[outbound-calls-ari]
+exten => s,1,NoOp(AI Agent Starting - ARI)
+    same => n,Stasis(aiagc)
+    same => n,Hangup()
+```
+
+#### Step 4: Update Application Code
+
+**Before (AGI):**
+```python
+from src.asterisk.call_handler import CallHandler
+
+# AGI script runs per-call
+handler = CallHandler()
+await handler.handle_call(phone_number)
+```
+
+**After (ARI):**
+```python
+from src.asterisk.ari_call_handler import create_ari_application
+
+# ARI application runs as a service
+create_ari_application()
+```
+
+#### Step 5: Start ARI Application
+
+Run the ARI application as a long-running service:
+
+```bash
+# Development
+python -m src.asterisk.ari_call_handler
+
+# Production (with systemd)
+sudo systemctl start aiagc-ari
+```
+
+#### Step 6: Update Call Origination
+
+**Before (AMI/AGI):**
+```python
+from src.asterisk.agi_interface import AsteriskAMI
+
+ami = AsteriskAMI()
+ami.connect()
+ami.originate_call(
+    phone_number="+491234567890",
+    context="outbound-calls"
+)
+ami.disconnect()
+```
+
+**After (ARI):**
+```python
+from src.asterisk.ari_interface import AsteriskARI
+
+ari = AsteriskARI()
+ari.connect()
+ari.originate_call(
+    endpoint="PJSIP/+491234567890",
+    context="outbound-calls-ari"
+)
+ari.disconnect()
+```
+
+#### Step 7: Testing
+
+1. **Test ARI Connection**:
+   ```bash
+   curl -u asterisk:your_ari_password http://localhost:8088/ari/api-docs/resources.json
+   ```
+
+2. **Monitor ARI Events**:
+   ```bash
+   # View ARI event stream
+   curl -N -u asterisk:your_ari_password \
+     "http://localhost:8088/ari/events?app=aiagc&api_key=asterisk:your_ari_password"
+   ```
+
+3. **Test Call**:
+   ```bash
+   python examples/make_calls.py
+   ```
+
+### Benefits After Migration
+
+- ✅ **Better Performance**: Event-driven architecture
+- ✅ **More Control**: Fine-grained channel and bridge management
+- ✅ **Modern API**: RESTful interface with WebSocket events
+- ✅ **Better Debugging**: Rich event information and HTTP-based inspection
+- ✅ **Scalability**: Easier to distribute and scale
+
+### Backward Compatibility
+
+The legacy AGI implementation remains available for backward compatibility:
+- AGI contexts still work (`outbound-calls`, `ai-agent`)
+- Use `examples/make_calls.py` with `use_ari=False` parameter
+- No immediate migration required, but recommended for new deployments
 
 ## 🚀 Production Deployment
 
