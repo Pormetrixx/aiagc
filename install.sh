@@ -12,7 +12,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-ASTERISK_VERSION="20.6.0"
+ASTERISK_VERSION="20.10.2"
 INSTALL_DIR="/opt/aiagc"
 ASTERISK_USER="asterisk"
 
@@ -309,18 +309,27 @@ exten => 600,1,NoOp(Echo Test)
 
 [ai-agent]
 ; Context where AI agent answers (extension 1001)
-exten => s,1,NoOp(AI Agent Context - Call Received)
+; Legacy AGI mode (deprecated but still functional)
+exten => s,1,NoOp(AI Agent Context - Call Received - AGI Mode)
     same => n,Set(CHANNEL(language)=de)
     same => n,Answer()
     same => n,Wait(1)
     same => n,AGI(python3,$INSTALL_DIR/src/asterisk/call_handler.py)
     same => n,Hangup()
 
+[ai-agent-ari]
+; Context where AI agent answers using ARI (recommended)
+exten => s,1,NoOp(AI Agent Context - Call Received - ARI Mode)
+    same => n,Set(CHANNEL(language)=de)
+    same => n,Stasis(aiagc)
+    same => n,Hangup()
+
 [outbound-calls]
 ; Main outbound calling context for production AI agent calls
+; Legacy AGI mode (deprecated but still functional)
 
 ; Extension 's' - Start extension for outbound calls
-exten => s,1,NoOp(AI Agent Outbound Call Starting)
+exten => s,1,NoOp(AI Agent Outbound Call Starting - AGI Mode)
     same => n,Set(CHANNEL(language)=de)
     same => n,Answer()
     same => n,Wait(1)
@@ -328,7 +337,7 @@ exten => s,1,NoOp(AI Agent Outbound Call Starting)
     same => n,Hangup()
 
 ; Extension for manual testing
-exten => 100,1,NoOp(Test Call)
+exten => 100,1,NoOp(Test Call - AGI Mode)
     same => n,Answer()
     same => n,AGI(python3,$INSTALL_DIR/src/asterisk/call_handler.py)
     same => n,Hangup()
@@ -339,12 +348,33 @@ exten => 200,1,NoOp(Transfer to Human Agent)
     same => n,Voicemail(200@default,u)
     same => n,Hangup()
 
+[outbound-calls-ari]
+; Main outbound calling context using ARI (recommended)
+
+; Extension 's' - Start extension for outbound calls
+exten => s,1,NoOp(AI Agent Outbound Call Starting - ARI Mode)
+    same => n,Set(CHANNEL(language)=de)
+    same => n,Stasis(aiagc)
+    same => n,Hangup()
+
+; Extension for manual testing
+exten => 100,1,NoOp(Test Call - ARI Mode)
+    same => n,Stasis(aiagc)
+    same => n,Hangup()
+
 [incoming]
 ; Handle incoming external calls
+; Default to legacy AGI for backward compatibility
 exten => _X.,1,NoOp(Incoming Call from \${CALLERID(num)})
     same => n,Answer()
     same => n,Wait(1)
     same => n,AGI(python3,$INSTALL_DIR/src/asterisk/call_handler.py)
+    same => n,Hangup()
+
+[incoming-ari]
+; Handle incoming external calls with ARI (recommended)
+exten => _X.,1,NoOp(Incoming Call from \${CALLERID(num)} - ARI Mode)
+    same => n,Stasis(aiagc)
     same => n,Hangup()
 EOF
 
@@ -365,6 +395,35 @@ permit = 127.0.0.1/255.255.255.0
 permit = 172.16.0.0/255.255.0.0
 read = system,call,log,verbose,command,agent,user,config,dtmf,reporting,cdr,dialplan,originate
 write = system,call,log,verbose,command,agent,user,config,dtmf,reporting,cdr,dialplan,originate
+EOF
+
+# Create ari.conf for ARI access (modern REST interface)
+cat > /etc/asterisk/ari.conf << 'EOF'
+; Asterisk REST Interface Configuration
+
+[general]
+enabled = yes
+pretty = yes
+allowed_origins = *
+
+[asterisk]
+type = user
+read_only = no
+password = aiagc_ari_password_change_me
+password_format = plain
+EOF
+
+# Create http.conf for ARI HTTP server
+cat > /etc/asterisk/http.conf << 'EOF'
+; HTTP Server Configuration (required for ARI)
+
+[general]
+enabled = yes
+bindaddr = 0.0.0.0
+bindport = 8088
+enablestatic = yes
+redirect = /
+prefix = asterisk
 EOF
 
 # Create rtp.conf for audio

@@ -2,9 +2,29 @@
 
 ## Core Components
 
-### 1. Call Handler
+### 1. ARI Call Handler (Recommended)
 
-The main orchestrator for call lifecycle management.
+The modern ARI-based orchestrator for call lifecycle management.
+
+```python
+from src.asterisk.ari_call_handler import ARICallHandler, create_ari_application
+
+# Method 1: Run as application (recommended for production)
+create_ari_application()
+
+# Method 2: Handle individual call
+handler = ARICallHandler()
+handler.ari.connect()
+await handler.handle_call(
+    channel_id="channel_id_from_event",
+    phone_number="+491234567890",
+    customer_name="Max Mustermann"
+)
+```
+
+### 2. Legacy AGI Call Handler (Deprecated)
+
+The legacy AGI-based orchestrator (maintained for backward compatibility).
 
 ```python
 from src.asterisk.call_handler import CallHandler
@@ -16,9 +36,46 @@ await handler.handle_call(
 )
 ```
 
-### 2. Asterisk AMI
+### 3. Asterisk ARI (Recommended)
 
-For call origination and monitoring.
+Modern REST interface for call control.
+
+```python
+from src.asterisk.ari_interface import AsteriskARI
+
+ari = AsteriskARI()
+ari.connect()
+
+# Originate call
+channel_id = ari.originate_call(
+    endpoint="PJSIP/+491234567890",
+    context="outbound-calls-ari",
+    extension="s",
+    caller_id="+4987654321",
+    variables={"CAMPAIGN": "investment"}
+)
+
+# Answer channel
+ari.answer_channel(channel_id)
+
+# Play media
+playback_id = ari.play_media("sound:hello-world", channel_id=channel_id)
+
+# Set channel variable
+ari.set_channel_variable("MY_VAR", "value", channel_id=channel_id)
+
+# Get channel info
+info = ari.get_channel_info(channel_id)
+
+# Hangup
+ari.hangup_channel(channel_id)
+
+ari.disconnect()
+```
+
+### 4. Asterisk AMI (Legacy)
+
+Legacy Manager Interface for call origination and monitoring.
 
 ```python
 from src.asterisk.agi_interface import AsteriskAMI
@@ -38,7 +95,7 @@ ami.originate_call(
 ami.disconnect()
 ```
 
-### 3. Speech Recognition
+### 5. Speech Recognition
 
 #### Deepgram STT (Primary)
 
@@ -243,13 +300,109 @@ amount = extract_amount("Ich habe 50 tausend Euro verfügbar")
 ```python
 from src.config import settings
 
-# Access configuration
+# ARI Configuration
+print(settings.asterisk_ari_host)
+print(settings.asterisk_ari_port)
+print(settings.asterisk_ari_username)
+
+# Legacy AMI Configuration
+print(settings.asterisk_host)
+print(settings.asterisk_port)
+
+# Other settings
 print(settings.deepgram_api_key)
 print(settings.openai_model)
 print(settings.max_call_duration)
 
 # Update at runtime
 settings.log_level = "DEBUG"
+```
+
+## Advanced ARI Usage
+
+### Event-Driven Call Handling
+
+```python
+from src.asterisk.ari_interface import AsteriskARI
+
+ari = AsteriskARI(app_name="my-app")
+ari.connect()
+
+def on_stasis_start(channel, event):
+    """Handle new channel entering application"""
+    print(f"New call on channel {channel.id}")
+    
+    # Answer the call
+    channel.answer()
+    
+    # Play media
+    channel.play(media="sound:hello-world")
+    
+    # Set variables
+    channel.setChannelVar(variable="MY_VAR", value="value")
+
+def on_stasis_end(channel, event):
+    """Handle channel leaving application"""
+    print(f"Call ended on channel {channel.id}")
+
+# Register event handlers
+ari.client.on_channel_event('StasisStart', on_stasis_start)
+ari.client.on_channel_event('StasisEnd', on_stasis_end)
+
+# Start event loop
+ari.client.run(apps="my-app")
+```
+
+### Bridge Management
+
+```python
+from src.asterisk.ari_interface import AsteriskARI
+
+ari = AsteriskARI()
+ari.connect()
+
+# Create a bridge
+bridge_id = ari.create_bridge(bridge_type="mixing")
+
+# Originate two channels
+channel1_id = ari.originate_call(
+    endpoint="PJSIP/channel1",
+    app="my-app"
+)
+
+channel2_id = ari.originate_call(
+    endpoint="PJSIP/channel2",
+    app="my-app"
+)
+
+# Add channels to bridge
+ari.add_channel_to_bridge(channel1_id, bridge_id)
+ari.add_channel_to_bridge(channel2_id, bridge_id)
+
+# Remove channels and destroy bridge
+ari.remove_channel_from_bridge(channel1_id, bridge_id)
+ari.remove_channel_from_bridge(channel2_id, bridge_id)
+ari.destroy_bridge(bridge_id)
+```
+
+### Recording with ARI
+
+```python
+from src.asterisk.ari_interface import AsteriskARI
+
+ari = AsteriskARI()
+ari.connect()
+
+# Start recording on channel
+recording_name = ari.record_channel(
+    name="my-recording",
+    format="wav",
+    max_duration_seconds=300,
+    max_silence_seconds=5,
+    channel_id=channel_id
+)
+
+print(f"Recording started: {recording_name}")
 ```
 
 ## Custom Extensions

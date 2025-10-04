@@ -17,7 +17,14 @@ class Settings(BaseSettings):
     # Environment
     environment: str = "production"
     
-    # Asterisk
+    # Asterisk ARI
+    asterisk_ari_host: str = "localhost"
+    asterisk_ari_port: int = 8088
+    asterisk_ari_username: str = "asterisk"
+    asterisk_ari_password: str = ""
+    asterisk_language: str = "de"
+    
+    # Legacy Asterisk AMI (for backwards compatibility)
     asterisk_host: str = "localhost"
     asterisk_port: int = 5038
     asterisk_username: str = "admin"
